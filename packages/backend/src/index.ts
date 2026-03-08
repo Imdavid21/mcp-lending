@@ -671,15 +671,17 @@ async function handleMcpRequest(req: IncomingMessage, res: ServerResponse): Prom
 
     if (sessionId && transports.has(sessionId)) {
       // Existing session — forward to its transport
-      const body = await readBody(req);
-      await transports.get(sessionId)!.handleRequest(req, res, body);
+      const raw = await readBody(req);
+      let parsed: unknown;
+      try { parsed = JSON.parse(raw); } catch { /* let SDK handle */ }
+      await transports.get(sessionId)!.handleRequest(req, res, parsed);
       return;
     }
 
     // New connection — must be an initialize request
-    const body = await readBody(req);
+    const raw = await readBody(req);
     let message: Record<string, unknown> = {};
-    try { message = JSON.parse(body); } catch { /* handled below */ }
+    try { message = JSON.parse(raw); } catch { /* handled below */ }
 
     if (message?.method !== "initialize") {
       res.writeHead(400, { "Content-Type": "application/json" });
@@ -708,7 +710,7 @@ async function handleMcpRequest(req: IncomingMessage, res: ServerResponse): Prom
 
     const mcpServer = createMcpServer(clientApiKey);
     await mcpServer.connect(transport);
-    await transport.handleRequest(req, res, body);
+    await transport.handleRequest(req, res, message);
     return;
   }
 
