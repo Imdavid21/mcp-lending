@@ -5,11 +5,19 @@ import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
 import { useConnection } from 'wagmi';
-import { WalletButton } from './WalletButton';
-import { TxExecutor, type TxStep } from './TxExecutor';
+import { Send, Zap, TrendingUp, Wallet, Search, BarChart3, Sparkles, Loader2 } from 'lucide-react';
+import { Header } from './Header';
 import { Sidebar } from './Sidebar';
+import { Dashboard } from './Dashboard';
+import { LendingForm } from './LendingForm';
+import { TxExecutor, type TxStep } from './TxExecutor';
 import { EntityChip } from './EntityChip';
-import { t } from '@/lib/theme';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Card, CardContent } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 
 const markdownComponents: Components = {
   a({ href, children }) {
@@ -17,7 +25,11 @@ const markdownComponents: Components = {
     if (href && (href.startsWith('token:') || href.startsWith('chain:') || href.startsWith('market:'))) {
       return <EntityChip href={href}>{text}</EntityChip>;
     }
-    return <a href={href} target="_blank" rel="noopener noreferrer" className="underline text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300">{children}</a>;
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-4 hover:text-primary/80">
+        {children}
+      </a>
+    );
   },
 };
 
@@ -54,6 +66,15 @@ function saveChats(chats: Chat[]): void {
 
 function newChatId(): string { return Date.now().toString(); }
 
+const SUGGESTIONS = [
+  { icon: TrendingUp, text: 'Show me the market with the best yield on Arbitrum' },
+  { icon: Wallet, text: 'Show me my positions' },
+  { icon: Search, text: 'What are the best USDC lending rates right now?' },
+  { icon: BarChart3, text: 'Compare borrowing rates across all chains' },
+  { icon: Sparkles, text: 'What is the highest APY for ETH collateral?' },
+  { icon: TrendingUp, text: 'Show me the top 5 markets by total supply' },
+];
+
 export default function ChatContainer() {
   const [chats, setChats] = React.useState<Chat[]>(() => {
     if (typeof window === 'undefined') return [{ id: '0', title: '', messages: [], createdAt: Date.now() }];
@@ -70,7 +91,14 @@ export default function ChatContainer() {
   const [input, setInput] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
   const [darkMode, setDarkMode] = React.useState(false);
+  const [activeView, setActiveView] = React.useState<'chat' | 'dashboard'>('chat');
+  const [sidebarOpen, setSidebarOpen] = React.useState(true);
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
+  
+  // Form states
+  const [supplyFormOpen, setSupplyFormOpen] = React.useState(false);
+  const [borrowFormOpen, setBorrowFormOpen] = React.useState(false);
+  const [formAsset, setFormAsset] = React.useState<string | undefined>();
 
   const { address } = useConnection();
   const activeChat = chats.find(c => c.id === activeChatId);
@@ -140,99 +168,186 @@ export default function ChatContainer() {
       setIsLoading(false);
     }
   };
+  
+  const handleOpenSupplyForm = (asset?: string) => {
+    setFormAsset(asset);
+    setSupplyFormOpen(true);
+  };
+  
+  const handleOpenBorrowForm = (asset?: string) => {
+    setFormAsset(asset);
+    setBorrowFormOpen(true);
+  };
 
   return (
-    <div className={`flex flex-row h-screen ${t.pageBg}`}>
-      <Sidebar chats={chats} activeChatId={activeChatId} onSelect={setActiveChatId} onNew={handleNewChat} />
+    <div className="flex flex-col h-screen bg-background">
+      <Header 
+        darkMode={darkMode} 
+        onToggleDarkMode={() => setDarkMode(d => !d)}
+        activeView={activeView}
+        onViewChange={setActiveView}
+      />
+      
+      <div className="flex flex-1 overflow-hidden">
+        {activeView === 'chat' && (
+          <Sidebar 
+            chats={chats} 
+            activeChatId={activeChatId} 
+            onSelect={setActiveChatId} 
+            onNew={handleNewChat}
+            isOpen={sidebarOpen}
+            onToggle={() => setSidebarOpen(!sidebarOpen)}
+          />
+        )}
 
-      <div className="flex flex-col flex-1 min-w-0">
-        <div className={`${t.panelBg} border-b ${t.border} px-6 py-4 shadow-sm flex items-center justify-between`}>
-          <div>
-            <h1 className={`text-2xl font-bold ${t.textPrimary}`}>Lending Agent</h1>
-            <p className={`text-sm ${t.textSecondary} mt-1`}>AI-powered lending platform assistant</p>
-            <p className={`text-xs ${t.textMuted} mt-0.5`}>by 1delta</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <WalletButton />
-            <div className={`w-px h-5 ${t.mutedBg} opacity-40`} />
-            <button onClick={() => setDarkMode(d => !d)} className={`p-1.5 rounded-full ${t.textSecondary} ${t.hover} transition`} aria-label="Toggle dark mode">
-              {darkMode
-                ? <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m8.66-9h-1M4.34 12h-1m15.07-6.07-.71.71M6.34 17.66l-.71.71m12.73 0-.71-.71M6.34 6.34l-.71-.71M12 5a7 7 0 100 14A7 7 0 0012 5z" /></svg>
-                : <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12.79A9 9 0 1111.21 3a7 7 0 009.79 9.79z" /></svg>
-              }
-            </button>
-          </div>
-        </div>
-
-        <div className={`flex-1 overflow-y-auto themed-scrollbar ${t.pageBg} ${messages.length === 0 ? 'flex items-center justify-center' : 'p-6 space-y-4'}`}>
-          {messages.length === 0 ? (
-            <div className="flex flex-col items-center gap-6 px-4 max-w-lg w-full">
-              <div className="text-center">
-                <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-600 mb-4 mx-auto shadow-lg">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                </div>
-                <h2 className={`text-xl font-semibold ${t.textPrimary}`}>How can I help you today?</h2>
-                <p className={`text-sm mt-1.5 ${t.textSecondary}`}>Ask me about lending markets, rates, positions, or execute DeFi actions.</p>
-                {!address && <p className="text-xs mt-2 text-blue-600 dark:text-blue-400">Connect your wallet to query your positions automatically.</p>}
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
-                {[
-                  { icon: '📈', text: 'Show me the market with the best yield on Arbitrum' },
-                  { icon: '💼', text: 'Show me my positions' },
-                  { icon: '💰', text: 'What are the best USDC lending rates right now?' },
-                  { icon: '🔍', text: 'Compare borrowing rates across all chains' },
-                  { icon: '⚡', text: 'What is the highest APY for ETH collateral?' },
-                  { icon: '📊', text: 'Show me the top 5 markets by total supply' },
-                ].map(({ icon, text }) => (
-                  <button key={text} onClick={() => setInput(text)} className={`flex items-start gap-2.5 text-left px-3.5 py-2.5 rounded-xl border ${t.borderSm} ${t.cardBg} ${t.textSecondary} ${t.hoverCard} transition text-sm`}>
-                    <span className="text-base leading-snug flex-shrink-0">{icon}</span>
-                    <span className="leading-snug">{text}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            messages.map(message => (
-              <div key={message.id} className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`px-4 py-3 rounded-lg ${message.type === 'user' ? 'max-w-xs lg:max-w-md bg-blue-600 text-white rounded-br-none' : `max-w-xl lg:max-w-2xl ${t.cardBg} ${t.textPrimary} rounded-bl-none`}`}>
-                  {message.type === 'user' ? (
-                    <p className="text-sm">{message.content}</p>
-                  ) : (
-                    <div className="text-sm prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0 [overflow-wrap:anywhere]">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}
-                        urlTransform={url => url.startsWith('token:') || url.startsWith('chain:') || url.startsWith('market:') ? url : defaultUrlTransform(url)}>
-                        {message.content}
-                      </ReactMarkdown>
-                      {message.transactions && message.transactions.length > 0 && <TxExecutor steps={message.transactions} quote={message.quote} />}
+        {activeView === 'dashboard' ? (
+          <Dashboard 
+            onOpenSupplyForm={handleOpenSupplyForm}
+            onOpenBorrowForm={handleOpenBorrowForm}
+          />
+        ) : (
+          <div className="flex flex-col flex-1 min-w-0">
+            <ScrollArea className="flex-1">
+              <div className={cn(
+                "h-full",
+                messages.length === 0 ? 'flex items-center justify-center' : 'p-4 md:p-6 space-y-4'
+              )}>
+                {messages.length === 0 ? (
+                  <div className="flex flex-col items-center gap-6 px-4 max-w-2xl w-full py-12">
+                    <div className="text-center">
+                      <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-primary mb-4 mx-auto shadow-lg">
+                        <Zap className="w-8 h-8 text-primary-foreground" />
+                      </div>
+                      <h2 className="text-2xl font-semibold text-balance">How can I help you today?</h2>
+                      <p className="text-sm mt-2 text-muted-foreground text-pretty max-w-md mx-auto">
+                        Ask me about lending markets, rates, positions, or execute DeFi actions across multiple protocols.
+                      </p>
+                      {!address && (
+                        <p className="text-xs mt-3 text-primary font-medium">
+                          Connect your wallet to query your positions automatically.
+                        </p>
+                      )}
                     </div>
-                  )}
-                  <span className={`text-xs mt-2 block ${message.type === 'user' ? 'text-blue-100' : t.textMuted}`}>{message.timestamp.toLocaleTimeString()}</span>
-                </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
+                      {SUGGESTIONS.map(({ icon: Icon, text }) => (
+                        <Card 
+                          key={text} 
+                          className="cursor-pointer hover:bg-muted/50 transition-colors"
+                          onClick={() => setInput(text)}
+                        >
+                          <CardContent className="flex items-start gap-3 p-3">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted flex-shrink-0">
+                              <Icon className="h-4 w-4 text-muted-foreground" />
+                            </div>
+                            <span className="text-sm text-muted-foreground leading-relaxed">{text}</span>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {messages.map(message => (
+                      <div key={message.id} className={cn("flex gap-3", message.type === 'user' ? 'justify-end' : 'justify-start')}>
+                        {message.type === 'agent' && (
+                          <Avatar className="h-8 w-8 flex-shrink-0">
+                            <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                              <Zap className="h-4 w-4" />
+                            </AvatarFallback>
+                          </Avatar>
+                        )}
+                        <div className={cn(
+                          "rounded-lg px-4 py-3 max-w-[85%] lg:max-w-2xl",
+                          message.type === 'user' 
+                            ? 'bg-primary text-primary-foreground rounded-br-none' 
+                            : 'bg-muted rounded-bl-none'
+                        )}>
+                          {message.type === 'user' ? (
+                            <p className="text-sm">{message.content}</p>
+                          ) : (
+                            <div className="text-sm prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0 [overflow-wrap:anywhere]">
+                              <ReactMarkdown 
+                                remarkPlugins={[remarkGfm]} 
+                                components={markdownComponents}
+                                urlTransform={url => url.startsWith('token:') || url.startsWith('chain:') || url.startsWith('market:') ? url : defaultUrlTransform(url)}
+                              >
+                                {message.content}
+                              </ReactMarkdown>
+                              {message.transactions && message.transactions.length > 0 && (
+                                <TxExecutor steps={message.transactions} quote={message.quote} />
+                              )}
+                            </div>
+                          )}
+                          <span className={cn(
+                            "text-[10px] mt-2 block",
+                            message.type === 'user' ? 'text-primary-foreground/70' : 'text-muted-foreground'
+                          )}>
+                            {message.timestamp.toLocaleTimeString()}
+                          </span>
+                        </div>
+                        {message.type === 'user' && (
+                          <Avatar className="h-8 w-8 flex-shrink-0">
+                            <AvatarFallback className="bg-muted text-muted-foreground text-xs">
+                              {address ? address.slice(2, 4).toUpperCase() : 'U'}
+                            </AvatarFallback>
+                          </Avatar>
+                        )}
+                      </div>
+                    ))}
+                    {isLoading && (
+                      <div className="flex gap-3 justify-start">
+                        <Avatar className="h-8 w-8 flex-shrink-0">
+                          <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                            <Zap className="h-4 w-4" />
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="bg-muted rounded-lg rounded-bl-none px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                            <span className="text-sm text-muted-foreground">Thinking...</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+                <div ref={messagesEndRef} />
               </div>
-            ))
-          )}
-          {isLoading && (
-            <div className="flex justify-start">
-              <div className={`${t.cardBg} ${t.textPrimary} px-4 py-3 rounded-lg rounded-bl-none`}>
-                <div className="flex space-x-2">
-                  {[0, 0.1, 0.2].map(d => <div key={d} className={`w-2 h-2 ${t.mutedBg} rounded-full animate-bounce`} style={{ animationDelay: `${d}s` }} />)}
-                </div>
-              </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
+            </ScrollArea>
 
-        <div className={`${t.panelBg} border-t ${t.border} px-6 py-4`}>
-          <form onSubmit={handleSendMessage} className="flex gap-3">
-            <input type="text" value={input} onChange={e => setInput(e.target.value)}
-              placeholder="Ask about lending markets, positions, or actions..."
-              disabled={isLoading}
-              className={`flex-1 px-4 py-2 border ${t.borderSm} rounded-lg ${t.cardBg} ${t.textPrimary} placeholder-stone-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60`} />
-            <button type="submit" disabled={isLoading || !input.trim()} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium transition">Send</button>
-          </form>
-        </div>
+            <div className="border-t bg-background p-4">
+              <form onSubmit={handleSendMessage} className="flex gap-3 max-w-4xl mx-auto">
+                <Input
+                  type="text"
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  placeholder="Ask about lending markets, positions, or actions..."
+                  disabled={isLoading}
+                  className="flex-1"
+                />
+                <Button type="submit" disabled={isLoading || !input.trim()}>
+                  <Send className="h-4 w-4" />
+                  <span className="sr-only">Send</span>
+                </Button>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
+      
+      {/* Lending Forms */}
+      <LendingForm 
+        type="supply"
+        isOpen={supplyFormOpen}
+        onClose={() => setSupplyFormOpen(false)}
+        initialAsset={formAsset}
+      />
+      <LendingForm 
+        type="borrow"
+        isOpen={borrowFormOpen}
+        onClose={() => setBorrowFormOpen(false)}
+        initialAsset={formAsset}
+      />
     </div>
   );
 }

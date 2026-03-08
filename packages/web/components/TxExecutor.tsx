@@ -2,6 +2,11 @@
 
 import React from 'react';
 import { useAccount, useSendTransaction, useSwitchChain } from 'wagmi';
+import { Check, X, Loader2, ChevronDown, AlertTriangle, ExternalLink } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 export interface TxStep {
   description: string;
@@ -20,11 +25,25 @@ function parseValue(v: string): bigint {
   } catch { return 0n; }
 }
 
-function StatusDot({ status }: { status: StepStatus }) {
-  if (status === 'pending') return <div className="w-4 h-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin flex-shrink-0" />;
-  if (status === 'success') return <div className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0"><svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg></div>;
-  if (status === 'error') return <div className="w-4 h-4 rounded-full bg-red-500 flex items-center justify-center flex-shrink-0"><svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></div>;
-  return <div className="w-4 h-4 rounded-full border-2 border-gray-300 dark:border-gray-600 flex-shrink-0" />;
+function StatusIcon({ status }: { status: StepStatus }) {
+  if (status === 'pending') {
+    return <Loader2 className="h-4 w-4 animate-spin text-primary" />;
+  }
+  if (status === 'success') {
+    return (
+      <div className="h-5 w-5 rounded-full bg-emerald-500 flex items-center justify-center">
+        <Check className="h-3 w-3 text-white" />
+      </div>
+    );
+  }
+  if (status === 'error') {
+    return (
+      <div className="h-5 w-5 rounded-full bg-destructive flex items-center justify-center">
+        <X className="h-3 w-3 text-white" />
+      </div>
+    );
+  }
+  return <div className="h-5 w-5 rounded-full border-2 border-muted-foreground/30" />;
 }
 
 interface SimPre { healthFactor?: number; borrowCapacity?: number; }
@@ -48,17 +67,34 @@ function SimulationPanel({ sim }: { sim: SimulationData }) {
     { label: 'Borrow APR', before: '—', after: fPct(post.aprData?.borrowApr) },
     { label: 'Deposit APR', before: '—', after: fPct(post.aprData?.depositApr) },
   ];
+  
   return (
-    <div className="border-b border-blue-100 dark:border-blue-900">
-      {lowHF && <div className="px-3 py-1.5 bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-400 font-medium">Warning: health factor below 1.5 after this action</div>}
-      <table className="w-full">
-        <thead><tr className="bg-blue-50 dark:bg-blue-950"><th className="px-3 py-1.5 text-left font-semibold text-blue-700 dark:text-blue-300">Simulation</th><th className="px-3 py-1.5 text-right font-medium text-gray-400 dark:text-gray-500">Before</th><th className="px-3 py-1.5 text-right font-semibold text-blue-700 dark:text-blue-300">After</th></tr></thead>
-        <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+    <div className="border-b">
+      {lowHF && (
+        <div className="px-3 py-2 bg-destructive/10 text-destructive text-xs font-medium flex items-center gap-2">
+          <AlertTriangle className="h-3 w-3" />
+          Warning: health factor below 1.5 after this action
+        </div>
+      )}
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="bg-muted/50">
+            <th className="px-3 py-2 text-left font-semibold">Simulation</th>
+            <th className="px-3 py-2 text-right font-medium text-muted-foreground">Before</th>
+            <th className="px-3 py-2 text-right font-semibold">After</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y">
           {rows.map(row => (
-            <tr key={row.label} className="bg-white dark:bg-gray-800">
-              <td className="px-3 py-1 text-gray-500 dark:text-gray-400">{row.label}</td>
-              <td className="px-3 py-1 text-right font-mono text-gray-400 dark:text-gray-500">{row.before}</td>
-              <td className={`px-3 py-1 text-right font-mono font-medium ${row.danger ? 'text-red-500' : 'text-gray-900 dark:text-gray-100'}`}>{row.after}</td>
+            <tr key={row.label}>
+              <td className="px-3 py-1.5 text-muted-foreground">{row.label}</td>
+              <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">{row.before}</td>
+              <td className={cn(
+                "px-3 py-1.5 text-right font-mono font-medium",
+                row.danger ? 'text-destructive' : ''
+              )}>
+                {row.after}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -93,8 +129,14 @@ export function TxExecutor({ steps, quote }: { steps: TxStep[]; quote?: Record<s
       setStatuses(prev => prev.map((s, idx) => idx === i ? 'pending' : s));
       try {
         const step = steps[i];
-        if (step.chainId && step.chainId !== currentChainId) await switchChainAsync({ chainId: step.chainId });
-        const hash = await sendTransactionAsync({ to: step.to as `0x${string}`, data: step.data as `0x${string}`, value: parseValue(step.value) });
+        if (step.chainId && step.chainId !== currentChainId) {
+          await switchChainAsync({ chainId: step.chainId });
+        }
+        const hash = await sendTransactionAsync({ 
+          to: step.to as `0x${string}`, 
+          data: step.data as `0x${string}`, 
+          value: parseValue(step.value) 
+        });
         setStatuses(prev => prev.map((s, idx) => idx === i ? 'success' : s));
         setHashes(prev => prev.map((h, idx) => idx === i ? hash : h));
       } catch (err) {
@@ -109,36 +151,92 @@ export function TxExecutor({ steps, quote }: { steps: TxStep[]; quote?: Record<s
   }
 
   return (
-    <div className="mt-3 rounded-lg border border-blue-200 dark:border-blue-800 overflow-hidden text-xs">
-      <div className="bg-blue-50 dark:bg-blue-950 px-3 py-2 font-semibold text-blue-700 dark:text-blue-300">{steps.length} transaction{steps.length !== 1 ? 's' : ''} to execute</div>
+    <Card className="mt-3 overflow-hidden">
+      <CardHeader className="py-3 px-4 bg-muted/50">
+        <CardTitle className="text-sm font-medium flex items-center gap-2">
+          <Badge variant="secondary">{steps.length}</Badge>
+          transaction{steps.length !== 1 ? 's' : ''} to execute
+        </CardTitle>
+      </CardHeader>
+      
       {quote && <QuotePanel quote={quote} />}
-      <div className="divide-y divide-gray-100 dark:divide-gray-800">
+      
+      <CardContent className="p-0 divide-y">
         {steps.map((step, i) => (
-          <div key={i} className="flex items-start gap-2 px-3 py-2 bg-white dark:bg-gray-800">
-            <div className="mt-0.5"><StatusDot status={statuses[i]} /></div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1">
-                <p className="font-medium text-gray-900 dark:text-gray-100 capitalize flex-1">{step.description}</p>
-                <button onClick={() => setExpanded(prev => prev.map((v, idx) => idx === i ? !v : v))} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition flex-shrink-0">
-                  <svg className={`w-3.5 h-3.5 transition-transform ${expanded[i] ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-                </button>
+          <div key={i} className="px-4 py-3">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5">
+                <StatusIcon status={statuses[i]} />
               </div>
-              {expanded[i] && <div className="mt-1 space-y-0.5"><p className="font-mono text-gray-400 truncate">{step.to}</p><p className="font-mono text-gray-300 dark:text-gray-600 truncate">{step.data}</p></div>}
-              {hashes[i] && <p className="font-mono text-green-600 dark:text-green-400 truncate">tx: {hashes[i]}</p>}
-              {errors[i] && <p className="text-red-500 break-words">{errors[i]}</p>}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium capitalize">{step.description}</p>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={() => setExpanded(prev => prev.map((v, idx) => idx === i ? !v : v))}
+                  >
+                    <ChevronDown className={cn(
+                      "h-4 w-4 transition-transform",
+                      expanded[i] && "rotate-180"
+                    )} />
+                  </Button>
+                </div>
+                
+                {expanded[i] && (
+                  <div className="mt-2 space-y-1 text-xs font-mono text-muted-foreground">
+                    <p className="truncate">To: {step.to}</p>
+                    <p className="truncate">Data: {step.data}</p>
+                  </div>
+                )}
+                
+                {hashes[i] && (
+                  <a 
+                    href={`https://arbiscan.io/tx/${hashes[i]}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 text-xs text-emerald-500 flex items-center gap-1 hover:underline"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    View transaction
+                  </a>
+                )}
+                
+                {errors[i] && (
+                  <p className="mt-2 text-xs text-destructive break-words">{errors[i]}</p>
+                )}
+              </div>
             </div>
           </div>
         ))}
-      </div>
-      <div className="px-3 py-2 bg-gray-50 dark:bg-gray-900">
+      </CardContent>
+      
+      <CardFooter className="px-4 py-3 bg-muted/30">
         {allDone ? (
-          <p className="text-center font-medium text-green-600 dark:text-green-400">All transactions completed</p>
+          <p className="text-sm font-medium text-emerald-500 flex items-center gap-2 mx-auto">
+            <Check className="h-4 w-4" />
+            All transactions completed
+          </p>
         ) : (
-          <button onClick={executeAll} disabled={running} className="w-full py-1.5 px-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 dark:disabled:bg-blue-800 text-white font-medium rounded transition">
-            {running ? 'Executing…' : hasFailed ? 'Retry' : 'Execute Transactions'}
-          </button>
+          <Button 
+            onClick={executeAll} 
+            disabled={running}
+            className="w-full"
+          >
+            {running ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Executing...
+              </>
+            ) : hasFailed ? (
+              'Retry'
+            ) : (
+              'Execute Transactions'
+            )}
+          </Button>
         )}
-      </div>
-    </div>
+      </CardFooter>
+    </Card>
   );
 }
