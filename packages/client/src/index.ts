@@ -6,7 +6,10 @@ import { createProvider, PROVIDERS, PROVIDER_INFO } from "./providers/index.js";
 import type { HistoryMessage } from "./providers/types.js";
 
 const PORT = parseInt(process.env.PORT ?? "3001", 10);
-const MCP_SERVER_URL = process.env.MCP_SERVER_URL ?? "http://localhost:3002/mcp";
+const rawMcpUrl = process.env.MCP_SERVER_URL ?? "http://localhost:3002/mcp";
+const MCP_SERVER_URL = rawMcpUrl.startsWith("http://") || rawMcpUrl.startsWith("https://")
+  ? rawMcpUrl
+  : `https://${rawMcpUrl}`;
 
 let mcpClient: Client;
 
