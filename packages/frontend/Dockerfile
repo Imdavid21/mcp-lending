@@ -1,15 +1,21 @@
-# Frontend — self-contained build, served by nginx
-# Build context: packages/frontend/  (Railway uploads from CWD of deploy script)
+# Frontend — built from repo root context, served by nginx
 
 FROM node:20-alpine AS builder
 WORKDIR /app
 
 RUN npm install -g pnpm
 
-COPY package.json ./
+# Copy workspace manifests for layer caching
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/frontend/package.json ./packages/frontend/
+# Stub other packages so the workspace resolves
+RUN mkdir -p packages/backend packages/client && \
+    echo '{"name":"@mcp-lending/backend","version":"0.1.0","type":"module"}' > packages/backend/package.json && \
+    echo '{"name":"@mcp-lending/client","version":"0.1.0","type":"module"}' > packages/client/package.json
+
 RUN pnpm install --no-frozen-lockfile
 
-COPY . .
+COPY packages/frontend ./packages/frontend
 
 # Build-time env vars (baked into the static bundle)
 ARG VITE_CLIENT_URL=http://localhost:3001
@@ -17,11 +23,11 @@ ARG VITE_BASE_PATH=/
 ENV VITE_CLIENT_URL=$VITE_CLIENT_URL
 ENV VITE_BASE_PATH=$VITE_BASE_PATH
 
-RUN pnpm build
+RUN pnpm --filter @mcp-lending/frontend build
 
 # ── Runtime image ─────────────────────────────────────────────────────────────
 FROM nginx:alpine
-COPY --from=builder /app/dist /usr/share/nginx/html
+COPY --from=builder /app/packages/frontend/dist /usr/share/nginx/html
 
 # Use nginx template so PORT env var (set by Railway) is substituted at startup
 RUN mkdir -p /etc/nginx/templates && \
