@@ -1,6 +1,12 @@
-# MCP Lending Agent
+# MCP Lending Agent (Nebula)
 
-A Model Context Protocol (MCP) implementation for AI-powered interaction with the 1Delta lending platform. Monorepo with three packages: an MCP server, a multi-provider AI client, and a React chat frontend with wallet integration.
+A Model Context Protocol (MCP) implementation for AI powered interaction with the 1Delta lending platform. It is the agent backend behind Nebula, a DeFi yield intelligence product.
+
+Live app: https://delta-lend-guide.vercel.app
+Web app source: https://github.com/Imdavid21/delta-lend-guide
+This repo: https://github.com/Imdavid21/mcp-lending (fork of 1delta-DAO/mcp-lending)
+
+The monorepo has four packages: an MCP server that exposes the 1Delta API as tools, a multi provider AI client that runs the agent loop, a React chat frontend with wallet integration, and a Next.js web app.
 
 ## Architecture
 
